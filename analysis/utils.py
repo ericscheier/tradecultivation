@@ -56,8 +56,8 @@ def updatePairs():
         # what to return if error?
     
     # filter out pairs ending in .d
-    # p = re.compile(r'\.d')
-    pair_names = [i for i in list(pairs["result"])] # if p.search(i) is None]
+    p = re.compile(r'\.d')
+    pair_names = [i for i in list(pairs["result"]) if p.search(i) is None]
     # pair_names = list(pairs["result"])
     
     for pair in pair_names:
@@ -119,7 +119,7 @@ def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None,
         chain_is_valid = True
         previous_currency = portfolio_currency_name
         for target_currency in permutation:
-            while (permutation.index(target_currency) < (len(permutation)-1)) & chain_is_valid & chain_length < max_chain_length:
+            while (permutation.index(target_currency) < (len(permutation)-1)) and chain_is_valid and chain_length < max_chain_length:
                 try:
                     transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, target_currency)]
                     chain.append(transaction_pair)
@@ -133,7 +133,8 @@ def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None,
                         previous_currency = target_currency
                     except:
                         chain_is_valid = False
-            if (permutation.index(target_currency) == (len(permutation)-1)) & chain_is_valid:
+                        # print("Ruled out a chain")
+            if (permutation.index(target_currency) == (len(permutation)-1)) and chain_is_valid:
                 try:
                     transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, portfolio_currency_name)]
                     chain.append(transaction_pair)
@@ -145,6 +146,7 @@ def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None,
                         
                     except:
                         chain_is_valid = False
+                        # print("Ruled out a chain")
             if chain_is_valid:
                 possible_chains.append(chain)
                 print("Found a chain!")
