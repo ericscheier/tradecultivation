@@ -1,8 +1,11 @@
 from django.db.models import Q
+import itertools
+import re
 
 import krakenex
 from .models import Currency, Chain, Pair, ChainPair
 
+# utility function
 def withoutKeys(d, keys):
     return {x: d[x] for x in d if x not in keys}
 
@@ -51,7 +54,11 @@ def updatePairs():
         return
         # return an error to log
         # what to return if error?
-    pair_names = list(pairs["result"])
+    
+    # filter out pairs ending in .d
+    # p = re.compile(r'\.d')
+    pair_names = [i for i in list(pairs["result"])] # if p.search(i) is None]
+    # pair_names = list(pairs["result"])
     
     for pair in pair_names:
         pair_data = pairs["result"][pair]
@@ -73,7 +80,6 @@ def updatePairs():
         else:
             # update the pair
             pair_to_update = pair_to_update[0]
-            print(pair_to_update.name)
             pair_to_update.name = pair
             pair_to_update.altname = pair_data["altname"]
             pair_to_update.base_currency = Currency.objects.filter(name=pair_data["base"])[0]
@@ -87,30 +93,70 @@ def updatePairs():
     
     return Pair.objects.filter(is_eligible=True)
 
-def calculateChains(portfolio_currency_name="XXBT", pairs=None):
+def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None, max_chain_length=5):
     if pairs is None:
         pairs = Pair.objects.filter(is_eligible=True)
         # pairs = updatePairs()
+    if currencies is None:
+        currencies = Currency.objects.filter(is_eligible=True)
         
-    current_currency_name = portfolio_currency_name
-    chain_pairs = []
+    # determine all possible permutations of currency orderings of all sizes excluding the base currency and not repeating any currency twice in a chain
+    currency_names = [currency.name for currency in currencies if currency.name != portfolio_currency_name]
     
-    possible_next_pairs = pairs.filter(
-        (Q(base_currency__name=current_currency_name) |
-        Q(quote_currency__name=current_currency_name)
-        ).exclude(
-            (Q(base_currency__name__in=chain_pairs) |
-             Q(quote_currency__name__in=chain_pairs)
-        ))
+    pair_names = {pair.name:[pair.base_currency.name, pair.quote_currency.name] for pair in pairs}
+    
+    # for speed of testing
+    # currency_names = currency_names[0:6]
+    #
+    
+    permutations = [c for i in range(1, max_chain_length) for c in itertools.permutations(currency_names, i)]    
+    print("Calculated permutations")
+    # for each permutation, go through trade by trade to determine whether there exists a pair that could enable that trade, starting from the base currency and returning to it
+    possible_chains = []
+    for permutation in permutations:
+        chain = []
+        chain_length = 0
+        chain_is_valid = True
+        previous_currency = portfolio_currency_name
+        for target_currency in permutation:
+            while (permutation.index(target_currency) < (len(permutation)-1)) & chain_is_valid & chain_length < max_chain_length:
+                try:
+                    transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, target_currency)]
+                    chain.append(transaction_pair)
+                    chain_length += 1
+                    previous_currency = target_currency
+                except:
+                    try:
+                        transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(target_currency, previous_currency)]
+                        chain.append(transaction_pair)
+                        chain_length += 1
+                        previous_currency = target_currency
+                    except:
+                        chain_is_valid = False
+            if (permutation.index(target_currency) == (len(permutation)-1)) & chain_is_valid:
+                try:
+                    transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, portfolio_currency_name)]
+                    chain.append(transaction_pair)
+                    
+                except:
+                    try:
+                        transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(portfolio_currency_name, previous_currency)]
+                        chain.append(transaction_pair)
+                        
+                    except:
+                        chain_is_valid = False
+            if chain_is_valid:
+                possible_chains.append(chain)
+                print("Found a chain!")
+                
+            
         
     
-        
-    chains = {}
+    # if the chain can be completed, create it/update it in the db
+    # if not, move on to the next one
     
-    for starting_pair in starting_pairs:
-        
     
-    return chains
+    return possible_chains
     
     
 def updateChains(possible_chains=None):
