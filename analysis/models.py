@@ -2,18 +2,18 @@ from django.db import models
 
 # Create your models here.
 class Currency(models.Model):
-    name = models.CharField(null=False)
-    altname = models.CharField(null=False)
+    name = models.CharField(null=False, max_length=100)
+    altname = models.CharField(null=False, max_length=100)
     decimals = models.IntegerField(null=False)
     display_decimals = models.IntegerField(null=False)
     is_eligible = models.BooleanField(null=False, default=True)
     
 
 class Pair(models.Model):
-    name = models.CharField(null=False)
-    altname = models.CharField(null=False)
-    base_currency = models.ForeignKey(Currency, null=False)
-    quote_currency = models.ForeignKey(Currency, null=False)
+    name = models.CharField(null=False, max_length=100)
+    altname = models.CharField(null=False, max_length=100)
+    base_currency = models.ForeignKey(Currency, null=False, related_name="base_currency")
+    quote_currency = models.ForeignKey(Currency, null=False, related_name="quote_currency")
     is_eligible = models.BooleanField(null=False, default=False)
     
     def determineEligibility(self):
@@ -27,9 +27,9 @@ class Pair(models.Model):
     
 
 class Chain(models.Model):
-    name = models.CharField(null=False)
+    name = models.CharField(null=False, max_length=200)
     length = models.IntegerField(null=False)
-    courtage = models.DecimalField(null=False, default=0)
+    courtage = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
     is_eligible = models.BooleanField(null=False, default=False)
     
     def determineEligibility(self, max_length):
@@ -51,10 +51,10 @@ class Chain(models.Model):
     
 class ChainPair(models.Model):
     chain = models.ForeignKey(Chain, null=False)
-    pair = models.ManyToManyField(Pair, null=False)
+    pair = models.ManyToManyField(Pair)
     index = models.IntegerField(null=False)
     
     
     
     class Meta:
-        ordering = ('chain', 'place')
+        ordering = ('chain', 'index')
