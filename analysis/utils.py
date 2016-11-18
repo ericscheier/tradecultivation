@@ -1,6 +1,7 @@
 from django.db.models import Q
 import itertools
 import re
+import json
 
 import krakenex
 from .models import Currency, Chain, Pair, ChainPair
@@ -93,7 +94,9 @@ def updatePairs():
     
     return Pair.objects.filter(is_eligible=True)
 
-def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None, max_chain_length=5):
+def calculateChains(portfolio_currency="XXBT", currencies=None, pairs=None, max_chain_length=5):
+    
+    # max_chain_length >= 7 takes extremely long time
     if pairs is None:
         pairs = Pair.objects.filter(is_eligible=True)
         # pairs = updatePairs()
@@ -101,70 +104,72 @@ def calculateChains(portfolio_currency_name="XXBT", currencies=None, pairs=None,
         currencies = Currency.objects.filter(is_eligible=True)
         
     # determine all possible permutations of currency orderings of all sizes excluding the base currency and not repeating any currency twice in a chain
-    currency_names = [currency.name for currency in currencies if currency.name != portfolio_currency_name]
+    currency_names = [currency.name for currency in currencies if currency.name != portfolio_currency]
     
     pair_names = {pair.name:[pair.base_currency.name, pair.quote_currency.name] for pair in pairs}
     
     # for speed of testing
     # currency_names = currency_names[0:6]
     #
-    
-    permutations = [c for i in range(1, max_chain_length) for c in itertools.permutations(currency_names, i)]    
-    print("Calculated permutations")
+    possible_currency_pairs = list(itertools.combinations(currency_names,2))
+
+    permutations = [list(c) for i in range(1, max_chain_length) for c in itertools.permutations(currency_names, i)]  
+    # print("Calculated permutations")
     # for each permutation, go through trade by trade to determine whether there exists a pair that could enable that trade, starting from the base currency and returning to it
     possible_chains = []
     for permutation in permutations:
-        chain = []
-        chain_length = 0
-        chain_is_valid = True
-        previous_currency = portfolio_currency_name
-        for target_currency in permutation:
-            while (permutation.index(target_currency) < (len(permutation)-1)) and chain_is_valid and chain_length < max_chain_length:
-                try:
-                    transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, target_currency)]
-                    chain.append(transaction_pair)
-                    chain_length += 1
-                    previous_currency = target_currency
-                except:
-                    try:
-                        transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(target_currency, previous_currency)]
-                        chain.append(transaction_pair)
-                        chain_length += 1
-                        previous_currency = target_currency
-                    except:
-                        chain_is_valid = False
-                        # print("Ruled out a chain")
-            if (permutation.index(target_currency) == (len(permutation)-1)) and chain_is_valid:
-                try:
-                    transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(previous_currency, portfolio_currency_name)]
-                    chain.append(transaction_pair)
-                    
-                except:
-                    try:
-                        transaction_pair = list(pair_names.keys())[list(pair_names.values()).index(portfolio_currency_name, previous_currency)]
-                        chain.append(transaction_pair)
-                        
-                    except:
-                        chain_is_valid = False
-                        # print("Ruled out a chain")
-            if chain_is_valid:
-                possible_chains.append(chain)
-                print("Found a chain!")
-                
-            
+        # permutation.insert(0,portfolio_currency_name)
+        permutation.append(portfolio_currency)
         
-    
-    # if the chain can be completed, create it/update it in the db
-    # if not, move on to the next one
+        chain = []
+        chain_is_valid = True
+        
+        holding_currency = portfolio_currency
+        
+        for target_currency in permutation:
+            if chain_is_valid:
+                try:
+                    transaction_pair = list(pair_names.keys())[list(pair_names.values()).index([holding_currency, target_currency])]
+                    chain.append(transaction_pair)
+                    holding_currency = target_currency
+                except:
+                    try:
+                        transaction_pair = list(pair_names.keys())[list(pair_names.values()).index([target_currency, holding_currency])]
+                        chain.append(transaction_pair)
+                        holding_currency = target_currency
+                    except:
+                        chain_is_valid = False
+                        # print("Ruled out a chain")
+        if chain_is_valid:
+            possible_chains.append(chain)
+            # print("Found a chain!")
     
     
     return possible_chains
     
+def createChain(pair_list):
+    chain_length = len(pair_list)
+    
+    new_chain = Chain.objects.create(name=json.dumps(pair_list),
+                                     length=chain_length)
+    new_chain.save()
+    
+    chain_pairs = Pair.objects.filter(name__in=pair_list)
+    for pair_name in pair_list:
+        pair = chain_pairs.filter(name=pair_name)
+        pair_index = pair_list.index(pair_name)+1
+        new_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                 pair=pair,
+                                                 index=pair_index)
+        new_chain_pair.save()
     
 def updateChains(possible_chains=None):
     if possible_chains is None:
-        possible_chains = calculateChains()
-    return
+        possible_chains = calculateChains(max_chain_length=2)
+        
+    existing_chains = Chain.objects.filter(name__in=[json.dumps(i) for i in possible_chains])
+    new_chains = 1
+    obsolete_chains = Chain.objects.exclude(name__in=[json.dumps(i) for i in possible_chains]).update(is_eligible=False)
     
     
 def filterChains():

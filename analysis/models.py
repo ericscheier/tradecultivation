@@ -1,4 +1,5 @@
 from django.db import models
+import json
 
 # Create your models here.
 class Currency(models.Model):
@@ -31,6 +32,12 @@ class Chain(models.Model):
     length = models.IntegerField(null=False)
     courtage = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
     is_eligible = models.BooleanField(null=False, default=False)
+    
+    def setName(self, pair_list):
+        self.name = json.dumps(pair_list)
+        
+    def getName(self):
+        return json.loads(self.name)
     
     def determineEligibility(self, max_length):
         # is_eligible = True
