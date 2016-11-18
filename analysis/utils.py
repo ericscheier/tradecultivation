@@ -151,7 +151,8 @@ def createChain(pair_list):
     chain_length = len(pair_list)
     
     new_chain = Chain.objects.create(name=json.dumps(pair_list),
-                                     length=chain_length)
+                                     length=chain_length,
+                                    is_eligible=True)
     new_chain.save()
     
     chain_pairs = Pair.objects.filter(name__in=pair_list)
@@ -168,11 +169,18 @@ def updateChains(possible_chains=None):
         possible_chains = calculateChains(max_chain_length=2)
         
     existing_chains = Chain.objects.filter(name__in=[json.dumps(i) for i in possible_chains])
-    new_chains = 1
+    existing_chains.update(is_eligible=True)
+    
+    existing_chains_list = [x.getName() for x in existing_chains]
+    new_chains = set(possible_chains) - set(existing_chains_list)
+    for new_chain in new_chains:
+        createChain(new_chains)
+    
     obsolete_chains = Chain.objects.exclude(name__in=[json.dumps(i) for i in possible_chains]).update(is_eligible=False)
     
     
-def filterChains():
+def filterChains(max_chain_length):
+    
     return
     
 def eligiblePairs():
