@@ -153,6 +153,7 @@ def createChain(pair_list):
     new_chain = Chain.objects.create(name=json.dumps(pair_list),
                                      length=chain_length,
                                     is_eligible=True)
+    new_chain.updateCourtage()
     new_chain.save()
     
     chain_pairs = Pair.objects.filter(name__in=pair_list)
@@ -170,6 +171,9 @@ def updateChains(possible_chains=None):
         
     existing_chains = Chain.objects.filter(name__in=[json.dumps(i) for i in possible_chains])
     existing_chains.update(is_eligible=True)
+    for existing_chain in existing_chain:
+        existing_chain.updateCourtage()
+        
     
     existing_chains_list = [x.getName() for x in existing_chains]
     new_chains = set(possible_chains) - set(existing_chains_list)
@@ -179,10 +183,16 @@ def updateChains(possible_chains=None):
     obsolete_chains = Chain.objects.exclude(name__in=[json.dumps(i) for i in possible_chains]).update(is_eligible=False)
     
     
-def filterChains(max_chain_length):
     
-    return
+    return possible_chains
     
-def eligiblePairs():
-    return
+    
+def filterChains(possible_chains=None, max_chain_length=5):
+    filtered_chains = [chain for chain in possible_chains if len(chain)<=max_chain_length]
+    return filtered_chains
+    
+def eligiblePairs(filtered_chains):
+    flattened_list = [pair for chain in filtered_chains for pair in chain]
+    eligible_pairs = list(set(flattened_list))
+    return eligible_pairs
     
