@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/1.10/ref/settings/
 
 import os
 
+
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -37,6 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    #'djcelery',
     
     'analysis',
 ]
@@ -77,11 +80,32 @@ WSGI_APPLICATION = 'tradecultivation.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'tradecultivation',
+        'USER': 'tradecultivation',
+        'PASSWORD':'nnk_ke3@AvV{p[Q2',
+        'HOST': 'localhost',
+        'PORT': '',
     }
 }
 
+# Celery
+BROKER_URL = 'amqp://guest:guest@localhost:5672//'
+# CELERY_RESULT_BACKEND='default'
+# CELERY_ACCEPT_CONTENT = ['application/json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+
+from datetime import timedelta
+
+CELERYBEAT_SCHEDULE = {
+    'preparation': {
+        'task': 'analysis.preparation',
+        'schedule': timedelta(hours=8)
+    },
+}
+
+CELERY_TIMEZONE = 'UTC'
 
 # Password validation
 # https://docs.djangoproject.com/en/1.10/ref/settings/#auth-password-validators

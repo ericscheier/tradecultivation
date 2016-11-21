@@ -28,7 +28,7 @@ class Pair(models.Model):
     
 
 class Chain(models.Model):
-    name = models.CharField(null=False, max_length=200)
+    name = models.CharField(null=False, max_length=1000)
     length = models.IntegerField(null=False)
     courtage = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
     is_eligible = models.BooleanField(null=False, default=False)
@@ -39,27 +39,27 @@ class Chain(models.Model):
     def getName(self):
         return json.loads(self.name)
     
-    def determineEligibility(self, max_length):
-        # is_eligible = True
-        # if length > max_length:
-        #   is_eligible = False
-        # self.is_eligible = is_eligible
-        # self.save()
-        return
     
-    def updateCourtage(self):
+    def updateCourtage(self, courtage_percent):
+        length = self.length
+        initial_value = 1
+        prior_value = initial_value
+        for t in range(0,length):
+            resulting_value = prior_value - (prior_value * courtage_percent)
+            prior_value = resulting_value
+        courtage_cost = 1 - (resulting_value/initial_value)
+        
         # P(tn+1) = Ptn-1 - (Ptn-1 * t)
         # P0 = 1
         # Cost = 1 - P0/Pn
-        # self.courtage = courtage
-        # self.save()
-        return
+        self.courtage = courtage_cost
+        self.save()
         
     
 class ChainPair(models.Model):
     chain = models.ForeignKey(Chain, null=False)
     pair = models.ManyToManyField(Pair)
-    index = models.IntegerField(null=False)
+    index = models.IntegerField()
     
     
     

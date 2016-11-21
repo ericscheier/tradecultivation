@@ -1,7 +1,13 @@
 # tradecultivation
 
+Be sure to have installed Postgres:
+`
+sudo apt-get install python-pip python-dev libpq-dev postgresql postgresql-contrib
+`
+Then set it up [like this](https://www.digitalocean.com/community/tutorials/how-to-use-postgresql-with-your-django-application-on-ubuntu-14-04) with settings matching those in settings.py
 
-`git clone https://github.com/daneri/tradecultivation.git
+`
+git clone https://github.com/daneri/tradecultivation.git
 cd tradecultivation
 virtualenv venv
 pip install -r requirements.txt

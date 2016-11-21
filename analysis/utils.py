@@ -6,7 +6,7 @@ import json
 import krakenex
 from .models import Currency, Chain, Pair, ChainPair
 
-# utility function
+# Utility function
 def withoutKeys(d, keys):
     return {x: d[x] for x in d if x not in keys}
 
@@ -26,6 +26,7 @@ def updateCurrencies():
             return
         if not currency_to_update:
             # create the currency
+            print("creating currency: "+str(currency))
             new_currency = Currency.objects.create(name=currency,
                                    altname=currency_data["altname"],
                                    decimals=currency_data["decimals"],
@@ -49,6 +50,7 @@ def updateCurrencies():
 def updatePairs():
     #if currencies is None:
     #    currencies = updateCurrencies()
+    chains_need_updating = False
     api = krakenex.API()
     pairs = api.query_public("AssetPairs")
     if pairs["error"]:
@@ -69,6 +71,7 @@ def updatePairs():
             return
         if not pair_to_update:
             # create the pair
+            print("creating pair: "+str(pair))
             new_pair = Pair.objects.create(name=pair,
                                            altname=pair_data["altname"],
                                            base_currency=Currency.objects.filter(name=pair_data["base"])[0],
@@ -77,6 +80,7 @@ def updatePairs():
                                 
                                    )
             new_pair.save()
+            chains_need_updating = True
             
         else:
             # update the pair
@@ -90,7 +94,14 @@ def updatePairs():
             pair_to_update.save()
             
     # also make sure we find any currencies that are no longer listed
-    Pair.objects.exclude(name__in=pair_names).update(is_eligible=False)
+    exclude_pairs = Pair.objects.exclude(name__in=pair_names)
+    if exclude_pairs:
+        exclude_pairs.update(is_eligible=False)
+        chains_need_updating = True
+    
+    # Automatically update chains if a pair is added or removed
+    if chains_need_updating:
+        updateChains()
     
     return Pair.objects.filter(is_eligible=True)
 
@@ -152,47 +163,84 @@ def createChain(pair_list):
     
     new_chain = Chain.objects.create(name=json.dumps(pair_list),
                                      length=chain_length,
-                                    is_eligible=True)
-    new_chain.updateCourtage()
+                                     is_eligible=True)
+    new_chain.updateCourtage(courtage_percent=0.003)
     new_chain.save()
     
     chain_pairs = Pair.objects.filter(name__in=pair_list)
-    for pair_name in pair_list:
-        pair = chain_pairs.filter(name=pair_name)
-        pair_index = pair_list.index(pair_name)+1
+    if chain_length==2 and pair_list[0]==pair_list[1]:
+        # chains of length 2 must have same pair for both steps
+        # do first pair
+        pair_name = pair_list [0]
+        pair = chain_pairs.filter(name=pair_name).first()
+        pair_index = 1
         new_chain_pair = ChainPair.objects.create(chain=new_chain,
-                                                 pair=pair,
-                                                 index=pair_index)
+                                                  index=pair_index)
         new_chain_pair.save()
+        pair.chainpair_set.add(new_chain_pair)
+        
+        pair_index = 2
+        another_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                  index=pair_index)
+        another_chain_pair.save()
+        pair.chainpair_set.add(another_chain_pair)
+    else:
+        for pair_name in pair_list:
+            pair = chain_pairs.filter(name=pair_name).first()
+            pair_index = pair_list.index(pair_name)+1
+            new_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                      index=pair_index)
+            new_chain_pair.save()
+            pair.chainpair_set.add(new_chain_pair)
+        
     
 def updateChains(possible_chains=None):
     if possible_chains is None:
-        possible_chains = calculateChains(max_chain_length=2)
+        possible_chains = calculateChains()
         
+    # possible_chains_list = [json.dumps(i) for i in possible_chains]
+
     existing_chains = Chain.objects.filter(name__in=[json.dumps(i) for i in possible_chains])
-    existing_chains.update(is_eligible=True)
-    for existing_chain in existing_chain:
+        
+    for existing_chain in existing_chains:
+        if existing_chain.name in possible_chains:
+            existing_chains.update(is_eligible=True)
         existing_chain.updateCourtage()
         
     
     existing_chains_list = [x.getName() for x in existing_chains]
-    new_chains = set(possible_chains) - set(existing_chains_list)
+    new_chains = [x for x in possible_chains if x not in existing_chains_list]
+    
     for new_chain in new_chains:
-        createChain(new_chains)
+        print("creating chain: "+str(new_chain))
+        createChain(new_chain)
     
     obsolete_chains = Chain.objects.exclude(name__in=[json.dumps(i) for i in possible_chains]).update(is_eligible=False)
     
     
     
     return possible_chains
+
+def getChains():
+    return Chain.objects.filter(is_eligible=True)
     
     
 def filterChains(possible_chains=None, max_chain_length=5):
-    filtered_chains = [chain for chain in possible_chains if len(chain)<=max_chain_length]
+    if possible_chains is None:
+        possible_chains = getChains()
+        
+    filtered_chains = [chain for chain in possible_chains if chain.length <= max_chain_length]
     return filtered_chains
     
-def eligiblePairs(filtered_chains):
-    flattened_list = [pair for chain in filtered_chains for pair in chain]
+def eligiblePairs(filtered_chains=None, max_chain_length=5):
+    if filtered_chains is None:
+        filtered_chains = filterChains(max_chain_length=max_chain_length)
+        
+    flattened_list = [pair for chain in filtered_chains for pair in chain.getName()]
     eligible_pairs = list(set(flattened_list))
+    
+    Pair.objects.filter(name__in=eligible_pairs).update(is_eligible=True)
+    Pair.objects.exclude(name__in=eligible_pairs).update(is_eligible=False)
+    
     return eligible_pairs
     
