@@ -243,4 +243,27 @@ def eligiblePairs(filtered_chains=None, max_chain_length=5):
     Pair.objects.exclude(name__in=eligible_pairs).update(is_eligible=False)
     
     return eligible_pairs
+
+
+def harvest(eligible_pairs=None):
+    if eligible_pairs is None:
+        eligible_pairs = eligiblePairs()
+        
+    # verify kraken server time
+    # call kraken API for eligible pairs
+    # update pairs info in the db
+    return harvested_pairs
+
+def harvestFilter(harvested_pairs=None):
+    if harvested_pairs is None:
+        harvested_pairs = harvest()
     
+    # Filter out pairs without current buy and sell orders, and low volume of an asset pair.
+    # The volume need to be configurable, globally and per asset pair.
+    # If there are no sell orders they should be filtered out.
+    # If it is not possible to buy for at least 1 BTC and push it through a chain, it should be removed, the higher the better.
+    # The amount to buy for should be configurable, but default should be 1 BTC.
+    # This means that we need to be able to buy for at least 1 BTC and we will be able to get the ROI on, for example 4% on 1 BTC, i.e 1.04 BTC.
+    
+    # update survives_harvest per pair
+    return harvested_filtered_pairs

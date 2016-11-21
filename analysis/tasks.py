@@ -4,20 +4,24 @@ from celery import shared_task
 from celery.signals import celeryd_after_setup
 # from django.utils import timezone
 
+from . import utils
 
 @shared_task #(name='')
 def prepare():
-    currencies = updateCurrencies()
-    pairs = updatePairs()
-    possible_chains = getChains()
-    filtered_chains = filterChains(possible_chains=possible_chains, max_chain_length=5)
-    eligible_pairs = eligiblePairs(filtered_chains=filtered_chains, max_chain_length=5)
+    currencies = utils.updateCurrencies()
+    pairs = utils.updatePairs()
+    possible_chains = utils.getChains()
+    filtered_chains = utils.filterChains(possible_chains=possible_chains, max_chain_length=5)
+    eligible_pairs = utils.eligiblePairs(filtered_chains=filtered_chains, max_chain_length=5)
+    return eligible_pairs
 
 @shared_task
 def preBuild():
-    return
+    harvested_pairs = utils.harvest()
+    harvested_filtered_pairs = utils.harvestFilter(harvested_pairs=harvested_pairs)
+    return harvested_filtered_pairs
 
 @shared_task
-@celeryd_after_setup.update
+#@celeryd_after_setup.update
 def update():
     prepare()

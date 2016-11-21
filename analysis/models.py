@@ -15,16 +15,13 @@ class Pair(models.Model):
     altname = models.CharField(null=False, max_length=100)
     base_currency = models.ForeignKey(Currency, null=False, related_name="base_currency")
     quote_currency = models.ForeignKey(Currency, null=False, related_name="quote_currency")
+    volume=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    current_bid_price=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    current_ask_price=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    num_of_trades=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    minimum_volume = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
     is_eligible = models.BooleanField(null=False, default=False)
-    
-    def determineEligibility(self):
-        # determine which pairs are in valid chains
-        # is_eligible = False
-        # if [is in a valid chain]:
-        #   is_eligible = True
-        # self.is_eligible = is_eligible
-        # self.save()
-        return
+    survives_harvest = models.BooleanField(null=False, default=False)
     
 
 class Chain(models.Model):
@@ -48,10 +45,6 @@ class Chain(models.Model):
             resulting_value = prior_value - (prior_value * courtage_percent)
             prior_value = resulting_value
         courtage_cost = 1 - (resulting_value/initial_value)
-        
-        # P(tn+1) = Ptn-1 - (Ptn-1 * t)
-        # P0 = 1
-        # Cost = 1 - P0/Pn
         self.courtage = courtage_cost
         self.save()
         
