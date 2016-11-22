@@ -18,8 +18,7 @@ def prepare():
 @shared_task
 def preBuild():
     harvested_pairs = utils.harvest()
-    harvested_filtered_pairs = utils.harvestFilter(harvested_pairs=harvested_pairs)
-    return harvested_filtered_pairs
+    return harvested_pairs
 
 @shared_task
 #@celeryd_after_setup.update

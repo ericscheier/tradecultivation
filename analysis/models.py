@@ -17,11 +17,19 @@ class Pair(models.Model):
     quote_currency = models.ForeignKey(Currency, null=False, related_name="quote_currency")
     volume=models.DecimalField(null=True, decimal_places=8, max_digits=20)
     current_bid_price=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    current_bid_volume=models.DecimalField(null=True, decimal_places=8, max_digits=20)
     current_ask_price=models.DecimalField(null=True, decimal_places=8, max_digits=20)
-    num_of_trades=models.DecimalField(null=True, decimal_places=8, max_digits=20)
-    minimum_volume = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
+    current_ask_volume=models.DecimalField(null=True, decimal_places=8, max_digits=20)
+    num_of_trades=models.IntegerField(null=True)
+    minimum_ask_volume = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
+    minimum_bid_volume = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
     is_eligible = models.BooleanField(null=False, default=False)
     survives_harvest = models.BooleanField(null=False, default=False)
+    
+    def updateMinimumVolumes(self, minimum_transaction_size):
+        # cannot do this yet bc of paradox of calculating volumes
+        return
+        
     
 
 class Chain(models.Model):

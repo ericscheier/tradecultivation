@@ -251,19 +251,32 @@ def harvest(eligible_pairs=None):
         
     # verify kraken server time
     # call kraken API for eligible pairs
+    request = {"pair":','.join(eligible_pairs)}
+    api = krakenex.API()
+    tickers = api.query_public("Ticker", req=request)
+    if tickers["error"]:
+        return
+    for pair in eligible_pairs:
+        ticker = tickers["result"][pair]
+        pair_to_update = Pair.objects.filter(name=pair)
+        
+        pair_to_update.update(volume=float(ticker["v"][1]))
+        pair_to_update.update(current_bid_price=float(ticker["b"][0]))
+        pair_to_update.update(current_bid_volume=float(ticker["b"][2]))
+        pair_to_update.update(current_ask_price=float(ticker["a"][0]))
+        pair_to_update.update(current_bid_volume=float(ticker["a"][2]))
+        pair_to_update.update(num_of_trades=int(ticker["t"][1]))
+        # <pair_name> = pair name
+        # a = ask array(<price>, <whole lot volume>, <lot volume>),
+        # b = bid array(<price>, <whole lot volume>, <lot volume>),
+        # c = last trade closed array(<price>, <lot volume>),
+        # v = volume array(<today>, <last 24 hours>),
+        # p = volume weighted average price array(<today>, <last 24 hours>),
+        # t = number of trades array(<today>, <last 24 hours>),
+        # l = low array(<today>, <last 24 hours>),
+        # h = high array(<today>, <last 24 hours>),
+        # o = today's opening price
     # update pairs info in the db
-    return harvested_pairs
-
-def harvestFilter(harvested_pairs=None):
-    if harvested_pairs is None:
-        harvested_pairs = harvest()
+    harvested_pairs = Pair.objects.filter(name__in=eligible_pairs)
     
-    # Filter out pairs without current buy and sell orders, and low volume of an asset pair.
-    # The volume need to be configurable, globally and per asset pair.
-    # If there are no sell orders they should be filtered out.
-    # If it is not possible to buy for at least 1 BTC and push it through a chain, it should be removed, the higher the better.
-    # The amount to buy for should be configurable, but default should be 1 BTC.
-    # This means that we need to be able to buy for at least 1 BTC and we will be able to get the ROI on, for example 4% on 1 BTC, i.e 1.04 BTC.
-    
-    # update survives_harvest per pair
-    return harvested_filtered_pairs
+    return harvested_pairs.values()
