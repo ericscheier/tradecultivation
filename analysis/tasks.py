@@ -8,6 +8,11 @@ from . import utils
 
 @shared_task #(name='')
 def prepare():
+    '''
+    Description: Runs preparation stage
+    Inputs: None
+    Output: A list of eligible pairs that will be used in the pre-build stage
+    '''
     currencies = utils.updateCurrencies()
     pairs = utils.updatePairs()
     possible_chains = utils.getChains()
@@ -17,10 +22,20 @@ def prepare():
 
 @shared_task
 def preBuild():
+    '''
+    Description: Runs pre-build stage
+    Inputs: None
+    Output: A list of dictionary objects containing the characteristics of the pairs that will be used in the Build stage
+    '''
     harvested_pairs = utils.harvest()
     return harvested_pairs
 
 @shared_task
 #@celeryd_after_setup.update
 def update():
+    '''
+    Description: Runs essential functions upon application startup. Currently not functional.
+    Inputs: None
+    Output: None
+    '''
     prepare()
