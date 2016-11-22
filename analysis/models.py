@@ -36,6 +36,9 @@ class Chain(models.Model):
     name = models.CharField(null=False, max_length=1000)
     length = models.IntegerField(null=False)
     courtage = models.DecimalField(null=False, decimal_places=8, max_digits=20, default=0)
+    groi = models.DecimalField(null=True,decimal_places=8, max_digits=20)
+    nroi = models.DecimalField(null=True,decimal_places=8, max_digits=20)
+    max_investment = models.DecimalField(null=True,decimal_places=8, max_digits=20)
     is_eligible = models.BooleanField(null=False, default=False)
     
     def setName(self, pair_list):

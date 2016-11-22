@@ -2,6 +2,7 @@ from django.db.models import Q
 import itertools
 import re
 import json
+import decimal
 
 import krakenex
 from .models import Currency, Chain, Pair, ChainPair
@@ -124,7 +125,7 @@ def updatePairs():
 
 def calculateChains(portfolio_currency="XXBT", currencies=None, pairs=None, max_chain_length=5):
     '''
-    Description: Calculates all of the possible chains to trade from a base currency back into itself without using the same pair twice. There is a pair for each transaction, so chains to a single currency and back contain the same pair twice (e.g. [XXBTXJPY, XXBTXJPY])
+    Description: Calculates all of the possible chains to trade from a base currency back into itself without using the same pair twice. There is a pair for each transaction, so chains to a single currency and back contain the same pair twice (e.g. [XXBTZJPY, XXBTZJPY])
     Inputs:
         portfolio_currency: String, the currency which all chains should start and end with
         currencies: QuerySet, the eligible currencies to be traded
@@ -242,7 +243,7 @@ def updateChains(possible_chains=None):
     for existing_chain in existing_chains:
         if existing_chain.name in possible_chains:
             existing_chains.update(is_eligible=True)
-        existing_chain.updateCourtage()
+        existing_chain.updateCourtage(courtage_percent=0.003)
         
     
     existing_chains_list = [x.getName() for x in existing_chains]
@@ -326,7 +327,7 @@ def harvest(eligible_pairs=None):
         pair_to_update.update(current_bid_price=float(ticker["b"][0]))
         pair_to_update.update(current_bid_volume=float(ticker["b"][2]))
         pair_to_update.update(current_ask_price=float(ticker["a"][0]))
-        pair_to_update.update(current_bid_volume=float(ticker["a"][2]))
+        pair_to_update.update(current_ask_volume=float(ticker["a"][2]))
         pair_to_update.update(num_of_trades=int(ticker["t"][1]))
         # <pair_name> = pair name
         # a = ask array(<price>, <whole lot volume>, <lot volume>),
@@ -342,3 +343,74 @@ def harvest(eligible_pairs=None):
     harvested_pairs = Pair.objects.filter(name__in=eligible_pairs)
     
     return harvested_pairs.values()
+
+def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_length=5,portfolio_currency="XXBT",min_investment=1):
+    '''
+    Description:
+    Inputs:
+    Output:
+    '''
+    '''
+        https://support.kraken.com/hc/en-us/articles/203053186-Currency-Exchange-Buying-Selling-and-Currency-Pair-Selection
+        
+        In currency exchange, there is always one currency that is bought and one that is sold (the sold currency is used to purchase the bought currency). The currencies bought and sold are determined by two things in the order form. First, whether the "buy" or "sell" button on the order form is selected, and second, which currency pair is selected. If you want to buy or sell the second currency in a pair (the quote currency), you have to think backwards, since the "buy" button will actually sell the quote currency in exchange for the base currency and the "sell" button will buy the quote currency using the base currency. Here's a summary.
+        
+        If the "buy" button is selected and currency pair x/y is selected, then currency x will be bought and currency y sold.
+        
+        If the "sell" button is selected and currency pair x/y is selected, then currency x will be sold and currency y will be bought.
+    '''
+    if filtered_chains is None:
+        filtered_chains = filterChains(max_chain_length=max_chain_length)
+    if harvested_pairs is None:
+        harvested_pairs = harvest()
+    if currencies is None:
+        currencies = Currency.objects.filter(is_eligible=True)
+        
+    for chain in filtered_chains:
+        valid_chain = True
+        initial_capital = min_investment
+        max_investment = initial_capital
+        holding_capital = initial_capital
+        holding_currency = currencies.filter(name=portfolio_currency)[0].pk
+        for pair in chain.getName():
+            pair_specs = list(harvested_pairs.filter(name=pair))[0]
+            base_currency = pair_specs['base_currency_id']
+            quote_currency = pair_specs['quote_currency_id']
+            if holding_currency == base_currency:
+                # we need to sell base
+                # selling at the bid sells the base currency to get the quote currency
+                # so if we already have the base currency, we want the quote currency, we need to SELL at volumeID:               
+                holding_capital = pair_specs['current_bid_price']/holding_capital
+                
+                if pair_specs['current_bid_volume'] < holding_capital:
+                    valid_chain = False
+                
+                holding_currency = quote_currency
+            elif holding_currency == quote_currency:
+                # we need to buy base
+                # buying at the ask sells the quote currency to get the base currency
+                # if we already have the quote currency, we want the base currency, we need to BUY at the ASK
+                holding_capital = holding_capital/pair_specs['current_ask_price']
+                
+                if pair_specs['current_ask_volume'] < holding_capital:
+                    valid_chain = False
+                
+                holding_currency = base_currency
+            else:
+                # uh-oh, invalid chain somehow
+                return
+        groi = (holding_capital - initial_capital)/initial_capital
+        nroi = groi - decimal.Decimal(chain.courtage)
+        
+        chain.groi=groi
+        chain.nroi=nroi
+        chain.is_eligible=valid_chain
+        chain.max_investment=max_investment
+        chain.save()
+        
+    
+        
+            
+            
+    
+    
