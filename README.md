@@ -25,8 +25,9 @@ In a new terminal screen, run celery -A tradecultivation beat -l info
 ```
 python manage.py shell
 # import the functions you need
-from analysis.tasks import prepare, preBuild
+from analysis.tasks import prepare, preBuild, build
 # run the function
 prepare()
 preBuild()
+build()
 ```
