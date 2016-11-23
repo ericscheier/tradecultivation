@@ -31,6 +31,16 @@ def preBuild():
     return harvested_pairs
 
 @shared_task
+def build():
+    '''
+    Description: Runs build stage
+    Inputs: None
+    Output: A list of dictionary objects containing the valid chains, ordered by Net ROI
+    '''
+    trimmed_chains = utils.trim()
+    return trimmed_chains
+
+@shared_task
 #@celeryd_after_setup.update
 def update():
     '''

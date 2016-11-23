@@ -241,8 +241,9 @@ def updateChains(possible_chains=None):
     existing_chains = Chain.objects.filter(name__in=[json.dumps(i) for i in possible_chains])
         
     for existing_chain in existing_chains:
-        if existing_chain.name in possible_chains:
-            existing_chains.update(is_eligible=True)
+        if existing_chain.getName() in possible_chains:
+            existing_chain.is_eligible=True
+            existing_chain.save()
         existing_chain.updateCourtage(courtage_percent=0.003)
         
     
@@ -346,9 +347,15 @@ def harvest(eligible_pairs=None):
 
 def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_length=5,portfolio_currency="XXBT",min_investment=1):
     '''
-    Description:
+    Description: Determines Gross ROI, Net ROI, and Maximum Investment Potential for each chain
     Inputs:
-    Output:
+        harvested_pairs: List, of pairs of same format as harvest() result
+        filtered_chains: QuerySet of chains of same format as filterChains() result
+        currencies: QuerySet, valid currencies for trading
+        max_chain_length: Integer, max number of transactions desired per chain
+        portfolio_currency: String, name of currency that portfolio is denoted in
+        min_investment: Float, minimum amount of portfolio_currency that should be invested per chain
+    Output: A List of Dictionaries that are above the minimum investment criteria and ordered by Net ROI for the chain.
     '''
     '''
         https://support.kraken.com/hc/en-us/articles/203053186-Currency-Exchange-Buying-Selling-and-Currency-Pair-Selection
@@ -360,16 +367,15 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
         If the "sell" button is selected and currency pair x/y is selected, then currency x will be sold and currency y will be bought.
     '''
     if filtered_chains is None:
-        filtered_chains = filterChains(max_chain_length=max_chain_length)
+        filtered_chains = list(filterChains(max_chain_length=max_chain_length))
     if harvested_pairs is None:
         harvested_pairs = harvest()
     if currencies is None:
         currencies = Currency.objects.filter(is_eligible=True)
         
     for chain in filtered_chains:
-        valid_chain = True
         initial_capital = min_investment
-        max_investment = initial_capital
+        max_investment = None
         holding_capital = initial_capital
         holding_currency = currencies.filter(name=portfolio_currency)[0].pk
         for pair in chain.getName():
@@ -379,11 +385,13 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
             if holding_currency == base_currency:
                 # we need to sell base
                 # selling at the bid sells the base currency to get the quote currency
-                # so if we already have the base currency, we want the quote currency, we need to SELL at volumeID:               
-                holding_capital = pair_specs['current_bid_price']/holding_capital
+                # so if we already have the base currency, we want the quote currency, we need to SELL at the BID:               
+                holding_capital = holding_capital * pair_specs['current_bid_price']
                 
-                if pair_specs['current_bid_volume'] < holding_capital:
-                    valid_chain = False
+                if max_investment is None:
+                    max_investment = pair_specs['current_bid_volume']
+                max_investment = min(max_investment * pair_specs['current_bid_price'], pair_specs['current_bid_volume'])
+                
                 
                 holding_currency = quote_currency
             elif holding_currency == quote_currency:
@@ -392,8 +400,10 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
                 # if we already have the quote currency, we want the base currency, we need to BUY at the ASK
                 holding_capital = holding_capital/pair_specs['current_ask_price']
                 
-                if pair_specs['current_ask_volume'] < holding_capital:
-                    valid_chain = False
+                if max_investment is None:
+                    max_investment = pair_specs['current_ask_volume'] * pair_specs['current_ask_price']
+                max_investment = min(max_investment/pair_specs['current_ask_price'], pair_specs['current_ask_volume'])
+                
                 
                 holding_currency = base_currency
             else:
@@ -404,13 +414,8 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
         
         chain.groi=groi
         chain.nroi=nroi
-        chain.is_eligible=valid_chain
+        # chain.is_eligible=valid_chain
         chain.max_investment=max_investment
         chain.save()
         
-    
-        
-            
-            
-    
-    
+    return list(getChains().filter(max_investment__gte=min_investment).order_by('nroi').values())
