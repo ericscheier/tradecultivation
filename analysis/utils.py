@@ -6,6 +6,7 @@ import decimal
 
 import krakenex
 from .models import Currency, Chain, Pair, ChainPair
+from django.conf import settings
 
 # Utility function
 def withoutKeys(d, keys):
@@ -123,7 +124,7 @@ def updatePairs():
     
     return Pair.objects.filter(is_eligible=True)
 
-def calculateChains(portfolio_currency="XXBT", currencies=None, pairs=None, max_chain_length=5):
+def calculateChains(portfolio_currency="XXBT", currencies=None, pairs=None, max_chain_length=None):
     '''
     Description: Calculates all of the possible chains to trade from a base currency back into itself without using the same pair twice. There is a pair for each transaction, so chains to a single currency and back contain the same pair twice (e.g. [XXBTZJPY, XXBTZJPY])
     Inputs:
@@ -134,6 +135,8 @@ def calculateChains(portfolio_currency="XXBT", currencies=None, pairs=None, max_
     Output: A list of lists, each list is a valid chain of pairs
     '''
     # max_chain_length >= 7 takes extremely long time
+    if max_chain_length is None:
+        max_chain_length = settings.MAX_CHAIN_LENGTH
     if pairs is None:
         pairs = Pair.objects.filter(is_eligible=True)
         # pairs = updatePairs()
@@ -207,23 +210,26 @@ def createChain(pair_list):
         pair = chain_pairs.filter(name=pair_name).first()
         pair_index = 1
         new_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                  pair=pair,
                                                   index=pair_index)
         new_chain_pair.save()
-        pair.chainpair_set.add(new_chain_pair)
+        # pair.chainpair_set.add(new_chain_pair)
         
         pair_index = 2
         another_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                      pair=pair,
                                                   index=pair_index)
         another_chain_pair.save()
-        pair.chainpair_set.add(another_chain_pair)
+        # pair.chainpair_set.add(another_chain_pair)
     else:
         for pair_name in pair_list:
             pair = chain_pairs.filter(name=pair_name).first()
             pair_index = pair_list.index(pair_name)+1
             new_chain_pair = ChainPair.objects.create(chain=new_chain,
+                                                      pair=pair,
                                                       index=pair_index)
             new_chain_pair.save()
-            pair.chainpair_set.add(new_chain_pair)
+            # pair.chainpair_set.add(new_chain_pair)
         
     
 def updateChains(possible_chains=None):
@@ -269,7 +275,7 @@ def getChains():
     return Chain.objects.filter(is_eligible=True)
     
     
-def filterChains(possible_chains=None, max_chain_length=5):
+def filterChains(possible_chains=None, max_chain_length=None):
     '''
     Description: Returns chains only with desired properties
     Inputs:
@@ -277,13 +283,15 @@ def filterChains(possible_chains=None, max_chain_length=5):
         max_chain_length: Integer, maximum # of transactions or pairs to be in a chain (math is the same for both concepts)
     Output: List of lists, each list an ordered list of pairs denoting a valid chain that meets the filter criteria
     '''
+    if max_chain_length is None:
+        max_chain_length = settings.MAX_CHAIN_LENGTH
     if possible_chains is None:
         possible_chains = getChains()
         
     filtered_chains = [chain for chain in possible_chains if chain.length <= max_chain_length]
     return filtered_chains
     
-def eligiblePairs(filtered_chains=None, max_chain_length=5):
+def eligiblePairs(filtered_chains=None, max_chain_length=None):
     '''
     Description: Determines which pairs are eligible for trading and updates their status in the database accordingly
     Inputs:
@@ -291,6 +299,8 @@ def eligiblePairs(filtered_chains=None, max_chain_length=5):
         max_chain_length: Integer, maximum # of transactions or pairs to be in a chain (math is the same for both concepts). For passing through to filterChains
     Output: List of pairs that are part of an eligible chain
     '''
+    if max_chain_length is None:
+        max_chain_length = settings.MAX_CHAIN_LENGTH
     if filtered_chains is None:
         filtered_chains = filterChains(max_chain_length=max_chain_length)
         
@@ -345,7 +355,7 @@ def harvest(eligible_pairs=None):
     
     return harvested_pairs.values()
 
-def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_length=5,portfolio_currency="XXBT",min_investment=1):
+def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_length=None,portfolio_currency="XXBT",min_investment=None):
     '''
     Description: Determines Gross ROI, Net ROI, and Maximum Investment Potential for each chain
     Inputs:
@@ -366,6 +376,10 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
         
         If the "sell" button is selected and currency pair x/y is selected, then currency x will be sold and currency y will be bought.
     '''
+    if max_chain_length is None:
+        max_chain_length = settings.MAX_CHAIN_LENGTH
+    if min_investment is None:
+        min_investment = settings.MIN_INVESTMENT
     if filtered_chains is None:
         filtered_chains = list(filterChains(max_chain_length=max_chain_length))
     if harvested_pairs is None:
@@ -418,4 +432,19 @@ def trim(harvested_pairs=None, filtered_chains=None, currencies=None, max_chain_
         chain.max_investment=max_investment
         chain.save()
         
-    return list(getChains().filter(max_investment__gte=min_investment).order_by('nroi').values())
+    return getChains().filter(max_investment__gte=min_investment).order_by('nroi')
+
+def dry(harvested_chains=None):
+    '''
+    Description: Determines the transactions that need to be taken based on the presence of valid chains
+    Inputs:
+        harvested_chains: chains that meet the volume and returns criteria
+    Output: A List of dictionaries, each defining transactions that need to be taken (buy or sell)
+    '''
+    if harvested_chains is None:
+        harvested_chains = trim()
+        
+    transactions = [i.getTransactions() for i in harvested_chains]
+    
+    return transactions
+    

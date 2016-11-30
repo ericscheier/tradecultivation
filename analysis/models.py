@@ -1,5 +1,6 @@
 from django.db import models
 import json
+from django.conf import settings
 
 # Create your models here.
 class Currency(models.Model):
@@ -59,10 +60,31 @@ class Chain(models.Model):
         self.courtage = courtage_cost
         self.save()
         
+    def getTransactions(self):
+        transactions = {}
+        chain_pairs = ChainPair.objects.filter(chain=self.pk).order_by("index")
+        holding_currency = Currency.objects.filter(name=settings.PORTFOLIO_CURRENCY)[0].pk
+        for chain_pair in chain_pairs:
+            if holding_currency == chain_pair.pair.base_currency_id:
+                # we need to sell the pair
+                transaction_type = "sell"
+                holding_currency = chain_pair.pair.quote_currency_id
+            elif holding_currency == chain_pair.pair.quote_currency_id:
+                # we need to buy the pair
+                transaction_type = "buy"
+                holding_currency = chain_pair.pair.base_currency_id
+            else:
+                # transaction_type = None
+                return
+            transactions[chain_pair.index] = {"type":transaction_type, "pair":chain_pair.pair.name}
+        return transactions
+            
+        
+        
     
 class ChainPair(models.Model):
     chain = models.ForeignKey(Chain, null=False)
-    pair = models.ManyToManyField(Pair)
+    pair = models.ForeignKey(Pair, null=False) # ManyToManyField(Pair)
     index = models.IntegerField()
     
     

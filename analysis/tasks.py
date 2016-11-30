@@ -5,6 +5,9 @@ from celery.signals import celeryd_after_setup
 # from django.utils import timezone
 
 from . import utils
+from django.conf import settings
+import logging
+logger = logging.getLogger(__name__)
 
 @shared_task #(name='')
 def prepare():
@@ -15,10 +18,13 @@ def prepare():
     '''
     currencies = utils.updateCurrencies()
     pairs = utils.updatePairs()
+    chains = utils.updateChains()
     possible_chains = utils.getChains()
-    filtered_chains = utils.filterChains(possible_chains=possible_chains, max_chain_length=5)
-    eligible_pairs = utils.eligiblePairs(filtered_chains=filtered_chains, max_chain_length=5)
-    return eligible_pairs
+    filtered_chains = utils.filterChains(possible_chains=possible_chains, max_chain_length=settings.MAX_CHAIN_LENGTH)
+    eligible_pairs = utils.eligiblePairs(filtered_chains=filtered_chains, max_chain_length=settings.MAX_CHAIN_LENGTH)
+    for pair in eligible_pairs:
+        logger.info(pair)
+    logger.info(eligible_pairs)
 
 @shared_task
 def preBuild():
@@ -28,7 +34,9 @@ def preBuild():
     Output: A list of dictionary objects containing the characteristics of the pairs that will be used in the Build stage
     '''
     harvested_pairs = utils.harvest()
-    return harvested_pairs
+    for pair in harvested_pairs:
+        logger.info(pair)
+    logger.info(harvested_pairs)
 
 @shared_task
 def build():
@@ -38,7 +46,10 @@ def build():
     Output: A list of dictionary objects containing the valid chains, ordered by Net ROI
     '''
     trimmed_chains = utils.trim()
-    return trimmed_chains
+    transactions = utils.dry(harvested_chains=trimmed_chains)
+    for transaction in transactions:
+        logger.info(transaction)
+    logger.info(transactions)
 
 @shared_task
 #@celeryd_after_setup.update
